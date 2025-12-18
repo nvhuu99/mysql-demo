@@ -42,3 +42,35 @@ spec:
     #     limits: { cpu: 100m, memory: 1024Mi }
     #   startupProbe:
     #     failureThreshold: 120
+    metrics:
+      enabled: true
+      image:
+        registry: docker.io
+        repository: bitnamilegacy/mysqld-exporter
+        tag: 0.17.2-debian-12-r16
+      resources:
+        requests: { cpu: 100m, memory: 128Mi }
+        limits: { cpu: 100m, memory: 128Mi }
+      serviceMonitor:
+        enabled: true
+        jobLabel: "mysql"
+        interval: 30s
+        scrapeTimeout: 30s
+      extraArgs:
+        primary:
+          ## - --collect.global_status
+          ## - --collect.global_variables
+          ## - --collect.engine_innodb_status
+          ## - --collect.binlog_size
+          ## - --collect.info_schema.clientstats
+          ## - --collect.info_schema.innodb_metrics
+          ## - --collect.info_schema.innodb_tablespaces
+          ## - --collect.info_schema.query_response_time
+          ## - --collect.info_schema.tables
+          ## - --collect.info_schema.tables.databases
+          ## - --collect.info_schema.tablestats
+          ## - --collect.perf_schema.file_events
+          ## - --collect.perf_schema.file_instances
+          ## - --collect.perf_schema.indexiowaits
+          ## - --collect.perf_schema.tableiowaits
+          ## - --collect.perf_schema.tablelocks
