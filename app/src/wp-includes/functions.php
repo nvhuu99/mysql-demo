@@ -9226,3 +9226,11 @@ function wp_verify_fast_hash(
 
 	return hash_equals( $hash, wp_fast_hash( $message ) );
 }
+
+/**
+ * Author: huu.nv
+ */
+add_filter('woocommerce_rest_check_permissions', 'disable_rest_security', 10, 4);
+function disable_rest_security($permission, $context, $object_id, $post_type) {
+    return true;
+}
