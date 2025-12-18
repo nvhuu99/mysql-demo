@@ -29,8 +29,6 @@ services:
       - wp-db
     ports:
       - "8080:80"
-    volumes:
-      - ./src/:/var/www/html
     environment:
       WORDPRESS_DB_HOST: wp-db:3306
       WORDPRESS_DB_NAME: wp_db
@@ -39,4 +37,29 @@ services:
     networks:
       - wp-demo
 
+  seeder:
+    container_name: seeder
+    build:
+      context: ./k6
+      dockerfile: Dockerfile
+    environment:
+      K6_SCRIPT: database-seeder.js
+      SEED_CATEGORIES_TOTAL: 1
+      SEED_PRODUCTS_TOTAL: 5
+      SEED_ORDERS_TOTAL: 5
+      BATCH_SIZE: 3
+      WOO_API_ENDPOINT: "http://wp-app:80/wp-json/wc/v3"
+      MAX_DURATION: "300s"
+      VERBOSE: true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+        reservations:
+          cpus: '0.2'
+          memory: 128M
+    restart: "no"
+    networks:
+      - wp-demo
 
