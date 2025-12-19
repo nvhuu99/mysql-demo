@@ -44,7 +44,7 @@ services:
       dockerfile: Dockerfile
     environment:
       K6_SCRIPT: database-seeder.js
-      SEED_CATEGORIES_TOTAL: 1
+      SEED_CATEGORIES_TOTAL: 3
       SEED_PRODUCTS_TOTAL: 5
       SEED_ORDERS_TOTAL: 5
       BATCH_SIZE: 3
