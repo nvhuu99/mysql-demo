@@ -1,4 +1,4 @@
-import { sleep } from "k6"
+import { fail, sleep } from "k6"
 
 import { productUtil } from "./utils/products.js"
 import { orderUtil } from "./utils/orders.js"
@@ -6,9 +6,9 @@ import { randomInt, randomStr, forEachBatches } from "./utils/common.js"
 import { users } from "./constants/users.js"
 
 const {
-  SEED_CATEGORIES_TOTAL,
-  SEED_PRODUCTS_TOTAL,
-  SEED_ORDERS_TOTAL,
+  DB_MAX_CATEGORIES,
+  DB_MAX_PRODUCTS,
+  DB_MAX_ORDERS,
 
   WOO_API_ENDPOINT,
   BATCH_SIZE,
@@ -38,16 +38,35 @@ export const options = {
 };
 
 export default function(setupData) {
-  var configs = setupData.configs
+  try {
+    var configs = setupData.configs
+    productUtil.init(configs)
+    orderUtil.init(configs)
+    seedDatabase(configs)
+    console.log("Seed database successfully - Seed ID: " + configs["seedId"])
+  } catch (e) {
+    fail(e.stack)
+  }
+}
 
-  productUtil.init(configs)
-  orderUtil.init(configs)
 
-  seedCategories(configs["seedId"], SEED_CATEGORIES_TOTAL)
-  seedSimpleProducts(configs["seedId"], SEED_PRODUCTS_TOTAL)
-  seedOrders(configs["seedId"], SEED_ORDERS_TOTAL)
-
-  console.log("Seed ID: " + configs["seedId"])
+function seedDatabase(configs) {
+  const countCats = productUtil.countCategories()
+  if (DB_MAX_CATEGORIES > countCats) {
+    seedCategories(configs["seedId"], DB_MAX_CATEGORIES - countCats)
+  }
+  
+  const countProds = productUtil.countProducts()
+  console.log(countProds)
+  if (DB_MAX_PRODUCTS > countProds) {
+    seedSimpleProducts(configs["seedId"], DB_MAX_PRODUCTS - countProds)
+  }
+  
+  const countOrds = orderUtil.countOrders()
+  console.log(countOrds)
+  if (DB_MAX_ORDERS > countOrds) {
+    seedOrders(DB_MAX_ORDERS - countOrds)
+  }
 }
 
 function seedCategories(seedId, total) {
@@ -62,7 +81,7 @@ function seedCategories(seedId, total) {
 }
 
 function seedSimpleProducts(seedId, total) {
-  const categoryIds = productUtil.listCategories({ search: seedId, per_page: 20 }).map(c => c["id"])
+  const categoryIds = productUtil.listCategories().map(c => c["id"])
   const newProduct = () => {
     return {
       "name": `[${seedId}] ` + randomStr(randomInt(5, 25)),
@@ -80,8 +99,8 @@ function seedSimpleProducts(seedId, total) {
   forEachBatches(total, BATCH_SIZE, newProduct, submitProducts)
 }
 
-function seedOrders(seedId, total) {
-  const totalProducts = productUtil.countSimpleProducts()
+function seedOrders(total) {
+  const totalProducts = productUtil.countProducts()
   const newOrder = () => {
     const userInfo = users[randomInt(0, users.length - 1)]
     const size = randomInt(1, 10)

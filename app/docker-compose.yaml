@@ -44,12 +44,41 @@ services:
       dockerfile: Dockerfile
     environment:
       K6_SCRIPT: database-seeder.js
-      SEED_CATEGORIES_TOTAL: 3
-      SEED_PRODUCTS_TOTAL: 5
-      SEED_ORDERS_TOTAL: 5
-      BATCH_SIZE: 3
+      DB_MAX_CATEGORIES: 5
+      DB_MAX_PRODUCTS: 10
+      DB_MAX_ORDERS: 15
+      BATCH_SIZE: 5
       WOO_API_ENDPOINT: "http://wp-app:80/wp-json/wc/v3"
       MAX_DURATION: "300s"
+      VERBOSE: true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+        reservations:
+          cpus: '0.2'
+          memory: 128M
+    restart: "no"
+    networks:
+      - wp-demo
+
+  soak-test:
+    container_name: soak-test
+    build:
+      context: ./k6
+      dockerfile: Dockerfile
+    environment:
+      K6_SCRIPT: soak-test.js
+      RAMPING_STAGES_JSON: |-
+        [
+          { "target": 3, "duration": "10s" },
+          { "target": 10, "duration": "1h" },
+          { "target": 0, "duration": "10s" }
+        ]
+      SIMULATE_READ_WRITE_RATIO: 0.7
+      MAX_ERRORS: 10
+      WOO_API_ENDPOINT: "http://wp-app:80/wp-json/wc/v3"
       VERBOSE: true
     deploy:
       resources:

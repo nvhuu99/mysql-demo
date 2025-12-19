@@ -1,4 +1,3 @@
-import { fail } from 'k6'
 import http from "k6/http"
 
 import { parseJsonReponse, toQueryString, HTTP_HEADERS } from './common.js'
@@ -12,6 +11,12 @@ export const productUtil = {
   /* Optional arguments */
   verbose: true,
 
+  /* Props */
+  cache: {
+    countCategories: null,
+    countProducts: null,
+  },
+
 
   logTemplate(message) {
     return `vu: ${__VU} - ${message}`
@@ -23,14 +28,15 @@ export const productUtil = {
     } 
   },
 
-  failWhen(predicate, passMsg, failMsg) {
+  errorIf(predicate, verboseMsg, failMsg) {
     if (predicate) {
       if (failMsg != null) {
-        fail(this.logTemplate(failMsg))
+        console.log(this.logTemplate(failMsg))
+        throw new Error(failMsg)
       }
     } else {
-      if (passMsg != null) {
-        this.verboseLog(passMsg)
+      if (verboseMsg != null) {
+        this.verboseLog(verboseMsg)
       }
     }
   },
@@ -44,23 +50,35 @@ export const productUtil = {
     const endpoint = `${this.wooApiEndpoint}/products/categories?${toQueryString(filters)}`
     var response = http.get(endpoint, { headers: HTTP_HEADERS })
     var body = parseJsonReponse(response)
-    this.failWhen(response.status != 200, null, "failed to list categories: " + JSON.stringify(body))
+    this.errorIf(response.status != 200, null, "failed to list categories: " + JSON.stringify(body))
     return body
   },
 
-  countSimpleProducts() {
+  countCategories() {
+    if (this.cache.countCategories == null) {
+      this.cache.countCategories = this.listCategories().length
+    }
+    return this.cache.countCategories
+  },
+
+  countProducts() {
+    if (this.cache.countProducts != null) {
+      return this.cache.countProducts
+    }
     const endpoint = `${this.wooApiEndpoint}/reports/products/totals`
     var response = http.get(endpoint, { headers: HTTP_HEADERS })
     var body = parseJsonReponse(response)
-    this.failWhen(response.status != 200, null, "failed to count products: " + JSON.stringify(body))
-    return body.filter(r => r["slug"] == "simple").at(0)["total"]
+    this.errorIf(response.status != 200, null, "failed to count products: " + JSON.stringify(body))
+    var count = body.reduce((sum, report) => sum + report["total"], 0)
+    this.cache.countProducts = count
+    return count
   },
 
   searchProducts(filters) {
     const endpoint = `${this.wooApiEndpoint}/products?${toQueryString(filters)}`
     var response = http.get(endpoint, { headers: HTTP_HEADERS })
     var body = parseJsonReponse(response)
-    this.failWhen(response.status != 200, null, "failed to search products: " + JSON.stringify(body))
+    this.errorIf(response.status != 200, null, "failed to search products: " + JSON.stringify(body))
     return body
   },
 
@@ -68,7 +86,7 @@ export const productUtil = {
     const endpoint = `${this.wooApiEndpoint}/products/categories/batch`
     var response = http.post(endpoint, JSON.stringify({ "create": categories }), { headers: HTTP_HEADERS })
     var body = parseJsonReponse(response)
-    this.failWhen(response.status != 200, `created ${categories.length} categories`, "failed to create categories: " + JSON.stringify(body))
+    this.errorIf(response.status != 200, `created ${categories.length} categories`, "failed to create categories: " + JSON.stringify(body))
     return body["create"]
   },
 
@@ -76,7 +94,7 @@ export const productUtil = {
     const endpoint = `${this.wooApiEndpoint}/products/batch`
     var response = http.post(endpoint, JSON.stringify({ "create": products }), { headers: HTTP_HEADERS })
     var body = parseJsonReponse(response)
-    this.failWhen(response.status != 200, `created ${products.length} products`, "failed to create products: " + JSON.stringify(body))
+    this.errorIf(response.status != 200, `created ${products.length} products`, "failed to create products: " + JSON.stringify(body))
     return body["create"]
   },
 }
