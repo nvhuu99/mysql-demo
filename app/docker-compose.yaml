@@ -6,6 +6,7 @@ networks:
 
 volumes:
   wp-db:
+  wp-app:
 
 services:
   wp-db:
@@ -16,10 +17,19 @@ services:
       MYSQL_ROOT_PASSWORD: admin
     volumes:
       - wp-db:/var/lib/mysql
+      - ./my-custom.cnf:/etc/mysql/conf.d/my-custom.cnf
     ports:
       - "3306:3306"
     networks:
       - wp-demo
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2g
+        reservations:
+          cpus: '2'
+          memory: 2g
 
   wp-app:
     build: .
@@ -34,61 +44,151 @@ services:
       WORDPRESS_DB_NAME: wp_db
       WORDPRESS_DB_USER: root
       WORDPRESS_DB_PASSWORD: admin
+    volumes:
+      - wp-app:/var/www/html
     networks:
       - wp-demo
-
-  seeder:
-    container_name: seeder
-    build:
-      context: ./k6
-      dockerfile: Dockerfile
-    environment:
-      K6_SCRIPT: database-seeder.js
-      DB_MAX_CATEGORIES: 5
-      DB_MAX_PRODUCTS: 10
-      DB_MAX_ORDERS: 15
-      BATCH_SIZE: 5
-      WOO_API_ENDPOINT: "http://wp-app:80/wp-json/wc/v3"
-      MAX_DURATION: "300s"
-      VERBOSE: true
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '1'
+          memory: 512M
+  
+  mysql-exporter:
+    image: prom/mysqld-exporter:v0.18.0
+    container_name: mysql-exporter
+    depends_on:
+     - wp-db
+    command:
+      - --config.my-cnf=/cfg/.my.cnf
+      - --mysqld.address=wp-db:3306
+      # - --collect.global_status
+      # - --collect.global_variables
+      # - --collect.engine_innodb_status
+      # - --collect.binlog_size
+      # - --collect.info_schema.clientstats
+      # - --collect.info_schema.innodb_metrics
+      # - --collect.info_schema.innodb_tablespaces
+      # - --collect.info_schema.query_response_time
+      # - --collect.info_schema.tables
+      # - --collect.info_schema.tables.databases
+      # - --collect.info_schema.tablestats
+      # - --collect.perf_schema.file_events
+      # - --collect.perf_schema.file_instances
+      # - --collect.perf_schema.indexiowaits
+      # - --collect.perf_schema.tableiowaits
+      # - --collect.perf_schema.tablelocks
+    volumes:
+      - "./.my.cnf:/cfg/.my.cnf"
+    ports:
+      - 9104:9104
+    networks:
+      - wp-demo
     deploy:
       resources:
         limits:
           cpus: '0.2'
-          memory: 128M
+          memory: 256M
         reservations:
           cpus: '0.2'
-          memory: 128M
-    restart: "no"
+          memory: 256M
+
+  prometheus:
+    image: prom/prometheus:v3.8.1
+    container_name: prometheus
+    volumes:
+      - "./prometheus.yml:/etc/prometheus/prometheus.yml"
+    ports:
+      - 9090:9090
     networks:
       - wp-demo
-
-  soak-test:
-    container_name: soak-test
-    build:
-      context: ./k6
-      dockerfile: Dockerfile
-    environment:
-      K6_SCRIPT: soak-test.js
-      RAMPING_STAGES_JSON: |-
-        [
-          { "target": 3, "duration": "10s" },
-          { "target": 10, "duration": "1h" },
-          { "target": 0, "duration": "10s" }
-        ]
-      SIMULATE_READ_WRITE_RATIO: 0.7
-      MAX_ERRORS: 10
-      WOO_API_ENDPOINT: "http://wp-app:80/wp-json/wc/v3"
-      VERBOSE: true
     deploy:
       resources:
         limits:
           cpus: '0.2'
-          memory: 128M
+          memory: 512M
         reservations:
           cpus: '0.2'
-          memory: 128M
-    restart: "no"
+          memory: 512M
+
+  grafana:
+    image: grafana/grafana:12.0.2
+    container_name: grafana
+    volumes:
+      - "./grafana/dashboards:/var/lib/grafana/dashboards"
+      - "./grafana/provisioning:/etc/grafana/provisioning"
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
     networks:
       - wp-demo
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 512M
+        reservations:
+          cpus: '0.2'
+          memory: 512M
+
+  # seeder:
+  #   container_name: seeder
+  #   build:
+  #     context: ./k6
+  #     dockerfile: Dockerfile
+  #   environment:
+  #     K6_SCRIPT: database-seeder.js
+  #     DB_MAX_CATEGORIES: 5
+  #     DB_MAX_PRODUCTS: 10
+  #     DB_MAX_ORDERS: 15
+  #     BATCH_SIZE: 5
+  #     WOO_API_ENDPOINT: "http://wp-app:80/wp-json/wc/v3"
+  #     MAX_DURATION: "300s"
+  #     VERBOSE: true
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '0.2'
+  #         memory: 128M
+  #       reservations:
+  #         cpus: '0.2'
+  #         memory: 128M
+  #   restart: "no"
+  #   networks:
+  #     - wp-demo
+
+  # soak-test:
+  #   container_name: soak-test
+  #   build:
+  #     context: ./k6
+  #     dockerfile: Dockerfile
+  #   environment:
+  #     K6_SCRIPT: soak-test.js
+  #     RAMPING_STAGES_JSON: |-
+  #       [
+  #         { "target": 3, "duration": "10s" },
+  #         { "target": 10, "duration": "1h" },
+  #         { "target": 0, "duration": "10s" }
+  #       ]
+  #     SIMULATE_READ_WRITE_RATIO: 0.7
+  #     MAX_ERRORS: 10
+  #     WOO_API_ENDPOINT: "http://wp-app:80/wp-json/wc/v3"
+  #     VERBOSE: true
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '0.2'
+  #         memory: 128M
+  #       reservations:
+  #         cpus: '0.2'
+  #         memory: 128M
+  #   restart: "no"
+  #   networks:
+  #     - wp-demo
 
